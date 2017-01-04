@@ -1,0 +1,184 @@
+
+package externalmergesort;
+
+import java.io.*;
+import java.util.*;
+
+public class ExternalMergeSort {
+
+    static int NUMRECS = 1000000; // one million age records
+    static int PAGESIZE = 1000; // page buffer size is 4kilobytes and one int is 
+    //4 bytes so 4000/4 = 1000, so 1000 records per buffer
+
+    /**
+     * Takes in the age.txt file and formats it to another file by removing the
+     * commas and printing each age on a separate line. This makes it easier to
+     * sort
+     *
+     * @return returns a formatted age file
+     * @throws IOException
+     */
+    static String formatAgeFile() throws IOException {
+
+        String fileName = "formattedAgeFile.txt";// name of the file to be generated
+        try {
+            FileWriter formatWrite = new FileWriter(fileName);
+            PrintWriter formatPrint = new PrintWriter(formatWrite);
+            // reading the age.txt file into a single string
+            String content = new Scanner(new File("age.txt")).useDelimiter("\\Z").next();
+            // removing commas and printing each age to a new line in new file
+            String[] tokens = content.split(",", -1);
+            for (String t : tokens) {
+                if (!t.equals("")) {// ignoring extras
+                    formatPrint.println(t);
+                }
+            }
+
+            formatPrint.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return fileName;
+    }
+
+    /**
+     * Takes in an unsorted age file of one million records reads the file in
+     * chunks sorts the chunks and stores them in a temporary file merges all
+     * temporary files into one single sorted file
+     *
+     * @param fileName this file should take the formatted version of age.txt
+     */
+    public static void externalSort(String fileName) {
+        String tempFile = "tempFile";// name for temp files
+        //buffer with amount to read
+        int[] buffer = new int[PAGESIZE < NUMRECS ? PAGESIZE : NUMRECS];
+
+        // reading to buffer and writing to temp files
+        try {
+            FileReader formatRead = new FileReader(fileName);
+            BufferedReader bufferFormat = new BufferedReader(formatRead);
+            int chunk = (int) Math.ceil((double) NUMRECS / PAGESIZE);
+
+            int i, j;
+            // storing a chunk of the ages into buffer
+            for (i = 0; i < chunk; i++) {
+                for (j = 0; j < (PAGESIZE < NUMRECS ? PAGESIZE : NUMRECS); j++) {
+                    String t = bufferFormat.readLine();
+                    if (t != null) {
+                        buffer[j] = Integer.parseInt(t);
+                    } else {
+                        break;
+                    }
+                }
+                // sorting all integers stored in buffer
+                Arrays.sort(buffer);
+                // writing to temp files
+                FileWriter tempWrite = new FileWriter(tempFile + Integer.toString(i) + ".txt");
+                PrintWriter tempPrint = new PrintWriter(tempWrite);
+                for (int k = 0; k < j; k++) {
+                    tempPrint.println(buffer[k]);
+                }
+                tempPrint.close();
+                tempWrite.close();
+            }
+
+            bufferFormat.close();
+            formatRead.close();
+
+            // merging all temporary files
+            mergeSort(chunk, tempFile);
+            // deleting temporary files
+            removeTempFiles(fileName, tempFile);
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * compares the first age of sorted temporary files and merges the temporary
+     * files accordingly
+     *
+     * @param chunk size to determine array of front ages
+     * @param tempFile name of the temp file
+     * @throws IOException
+     */
+    static void mergeSort(int chunk, String tempFile) throws IOException {
+        int i;
+        int j;
+        int[] tempFront = new int[chunk];
+        BufferedReader[] bufferTemp = new BufferedReader[chunk];
+        //getting sorted temp file heads for comparing
+        for (i = 0; i < chunk; i++) {
+            bufferTemp[i] = new BufferedReader(new FileReader(tempFile + Integer.toString(i) + ".txt"));
+            String t = bufferTemp[i].readLine();
+            if (t != null) {
+                tempFront[i] = Integer.parseInt(t);
+            } else {
+                tempFront[i] = Integer.MAX_VALUE;
+            }
+        }
+        //merging temp files
+        FileWriter sortedWrite = new FileWriter("age-sorted.txt");
+        PrintWriter sortedPrint = new PrintWriter(sortedWrite);
+
+        for (i = 0; i < NUMRECS; i++) {
+            int minAge = tempFront[0];
+            int minTrack = 0;
+            //determining the smallest age
+            for (j = 0; j < chunk; j++) {
+                if (minAge > tempFront[j]) {
+                    minAge = tempFront[j];
+                    minTrack = j;
+                }
+            }
+            // writing all records to single file
+            sortedPrint.print(minAge + ",");
+            String t = bufferTemp[minTrack].readLine();
+            if (t != null) {
+                tempFront[minTrack] = Integer.parseInt(t);
+            } else {
+                tempFront[minTrack] = Integer.MAX_VALUE;
+            }
+
+        }
+        for (i = 0; i < chunk; i++) {
+            bufferTemp[i].close();
+        }
+        sortedPrint.close();
+        sortedWrite.close();
+
+    }
+
+    /**
+     * Removes all temporary files created in the process
+     *
+     * @param fileName name of file used to storage formatted version of age.txt
+     * @param tempFile name of temporary files
+     */
+    static void removeTempFiles(String fileName, String tempFile) {
+        int i;
+        //removes file that storaged formatted version of age.txt
+        File ff = new File(fileName);
+        if (ff.exists()) {
+            ff.delete();
+        }
+        //removing all temp files from 0-999
+        for (i = 0; i < 1000; i++) {
+            File tf = new File(tempFile + Integer.toString(i) + ".txt");
+            if (tf.exists()) {
+                tf.delete();
+            }
+        }
+
+    }
+
+    public static void main(String[] args) throws IOException {
+        String ageFormatted = formatAgeFile();
+        externalSort(ageFormatted);
+        System.out.println("The age.txt has been sorted into a new file"); 
+        System.out.println("The new file is named age-sorted.txt");
+
+    }
+}
